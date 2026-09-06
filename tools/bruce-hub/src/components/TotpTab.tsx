@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Key, Plus, Trash2, Wifi, QrCode, Copy, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { Key, Plus, Trash2, Wifi, QrCode, Copy, Check, AlertCircle, Loader2, Scan } from 'lucide-react'
+import { Scanner } from '@yudiel/react-qr-scanner'
+import type { IDetectedBarcode } from '@yudiel/react-qr-scanner'
 import clsx from 'clsx'
 import type { LogEntry } from '../types'
 
@@ -83,7 +85,7 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
   const [loading, setLoading]       = useState(false)
   const [copied, setCopied]         = useState('')
   const [showAdd, setShowAdd]       = useState(false)
-  const [addMode, setAddMode]       = useState<'manual' | 'uri'>('manual')
+  const [addMode, setAddMode]       = useState<'manual' | 'uri' | 'scan'>('manual')
   const [name, setName]             = useState('')
   const [secret, setSecret]         = useState('')
   const [uri, setUri]               = useState('')
@@ -219,7 +221,7 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
 
           {/* Mode toggle */}
           <div className="flex rounded-lg overflow-hidden border border-[var(--color-border-bright)]">
-            {(['manual', 'uri'] as const).map(m => (
+            {(['manual', 'uri', 'scan'] as const).map(m => (
               <button
                 key={m}
                 onClick={() => setAddMode(m)}
@@ -229,13 +231,30 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
                     : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
                 )}
               >
-                {m === 'manual' ? <Key size={11} /> : <QrCode size={11} />}
-                {m === 'manual' ? '手動入力' : 'otpauth URI'}
+                {m === 'manual' ? <Key size={11} /> : m === 'uri' ? <QrCode size={11} /> : <Scan size={11} />}
+                {m === 'manual' ? '手動入力' : m === 'uri' ? 'URI入力' : 'QR読取'}
               </button>
             ))}
           </div>
 
-          {addMode === 'manual' ? (
+          {addMode === 'scan' && (
+            <div className="w-full aspect-square max-h-64 mx-auto rounded-xl overflow-hidden relative bg-black">
+              <Scanner
+                onScan={(result: IDetectedBarcode[]) => {
+                  if (result && result.length > 0) {
+                    const scanned = result[0].rawValue
+                    if (scanned.startsWith('otpauth://')) {
+                      setUri(scanned)
+                      setAddMode('uri') // switch to URI mode to review and submit
+                    }
+                  }
+                }}
+                formats={['qr_code']}
+              />
+            </div>
+          )}
+
+          {addMode === 'manual' && (
             <>
               <input
                 type="text"
@@ -252,7 +271,9 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
                 className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
               />
             </>
-          ) : (
+          )}
+
+          {addMode === 'uri' && (
             <input
               type="text"
               value={uri}
@@ -262,24 +283,26 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
             />
           )}
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowAdd(false)}
-              className="flex-1 py-2 rounded-lg text-sm text-[var(--color-muted)] border border-[var(--color-border-bright)] hover:text-[var(--color-text)] transition-colors"
-            >
-              キャンセル
-            </button>
-            <button
-              onClick={handleAdd}
-              disabled={loading || (addMode === 'manual' ? !secret : !uri)}
-              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold
-                bg-[var(--color-cyan)]/20 border border-[var(--color-cyan)]/50 text-[var(--color-cyan)]
-                disabled:opacity-40 hover:bg-[var(--color-cyan)]/30 transition-colors"
-            >
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              追加
-            </button>
-          </div>
+          {addMode !== 'scan' && (
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setShowAdd(false)}
+                className="flex-1 py-2 rounded-lg text-sm text-[var(--color-muted)] border border-[var(--color-border-bright)] hover:text-[var(--color-text)] transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleAdd}
+                disabled={loading || (addMode === 'manual' ? !secret : !uri)}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold
+                  bg-[var(--color-cyan)]/20 border border-[var(--color-cyan)]/50 text-[var(--color-cyan)]
+                  disabled:opacity-40 hover:bg-[var(--color-cyan)]/30 transition-colors"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                追加
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
