@@ -47,6 +47,8 @@ void handleSerialCommands(SerialCli &serialCli) {
     if (!serialDevice->available()) return;
 
     String cmd_str = serialDevice->readStringUntil('\n');
+    cmd_str.trim();
+    if (cmd_str.length() == 0) return;
     Serial.println("COMMAND: " + cmd_str);
     serialCli.parse(cmd_str);
     serialDevice->print("# "); // prompt
@@ -54,9 +56,7 @@ void handleSerialCommands(SerialCli &serialCli) {
     // forced menu redrawn if the command is not "nav" or "option"
     // it allows navigation commands to be executed without returning to the menu, while other commands will
     // return to the menu after execution.
-    String cmd_trimmed = cmd_str;
-    cmd_trimmed.trim();
-    if (!cmd_trimmed.startsWith("nav") && !cmd_trimmed.startsWith("option")) { backToMenu(); }
+    if (!cmd_str.startsWith("nav") && !cmd_str.startsWith("option") && !cmd_str.startsWith("totp")) { backToMenu(); }
 }
 
 void _serialCmdsTaskLoop(void *pvParameters) {
