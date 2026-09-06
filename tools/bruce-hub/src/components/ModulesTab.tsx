@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Radio, Zap, Usb, HardDrive, ChevronRight, Play, Loader2 } from 'lucide-react'
+import { Radio, Zap, Usb, HardDrive, Key, ChevronRight, Play, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
 
 interface Props {
@@ -50,6 +50,18 @@ const MODULES: Module[] = [
     actions: [
       { label: 'List scripts',    cmd: 'ls /BadUSB'               },
       { label: 'Run from buffer', cmd: 'badusb run_from_buffer'   },
+    ],
+  },
+  {
+    id: 'totp',
+    label: 'TOTP',
+    description: 'Time-based OTP authenticator',
+    icon: Key,
+    color: 'text-[var(--color-cyan)]',
+    actions: [
+      { label: 'Open TOTP App',    cmd: 'loader open TOTP Auth'   },
+      { label: 'List accounts',    cmd: 'cat /totp_accounts.json' },
+      { label: 'List apps',        cmd: 'loader list'             },
     ],
   },
   {
