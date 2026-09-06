@@ -170,7 +170,7 @@ export function TotpTab({ connected }: Props) {
         </div>
         <div>
           <p className="font-bold text-sm text-[var(--color-cyan)]">TOTP Authenticator</p>
-          <p className="text-[10px] text-[var(--color-muted)]">Bruce WiFi WebUI API が必要です</p>
+          <p className="text-[10px] text-[var(--color-muted)]">Bruce WiFi WebUI API 経由で管理</p>
         </div>
       </div>
 
@@ -196,7 +196,9 @@ export function TotpTab({ connected }: Props) {
           </button>
         </div>
         <p className="text-[9px] text-[var(--color-muted)]">
-          Bruce: WiFi → WebUI → 表示されるIPを入力。BLEとは同時使用不可。
+          Bruce: WiFi → Connect → WebUI → IPを確認して入力。
+          ESP32はBLEとWiFiを同時使用可能です。
+          スマホのBTテザリング経由でもアクセスできます。
         </p>
       </div>
 
