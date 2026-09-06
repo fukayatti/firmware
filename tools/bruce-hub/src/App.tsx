@@ -100,7 +100,7 @@ export default function App() {
       case 'gamepad':  return <GamepadTab  onCommand={handleSend} connected={bleState.connected} />
       case 'terminal': return <TerminalTab logs={logs} onSend={handleSend} onClear={clearLogs} connected={bleState.connected} />
       case 'modules':  return <ModulesTab  onCommand={handleSend} connected={bleState.connected} />
-      case 'totp':     return <TotpTab     onCommand={handleSend} connected={bleState.connected} />
+      case 'totp':     return <TotpTab     logs={logs} onCommand={handleSend} connected={bleState.connected} />
       case 'settings': return <SettingsTab onCommand={handleSend} connected={bleState.connected} />
     }
   }

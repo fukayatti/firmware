@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Key, Plus, Trash2, RefreshCw, Wifi, QrCode, Copy, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Key, Plus, Trash2, Wifi, QrCode, Copy, Check, AlertCircle, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
+import type { LogEntry } from '../types'
 
 interface Props {
+  logs: LogEntry[]
   onCommand: (cmd: string) => void
   connected: boolean
 }
@@ -15,12 +17,6 @@ interface TotpEntry {
   code: string
   seconds_left: number
 }
-
-// -----------------------------------------------------------------------
-// TOTP Tab — uses Bruce's WiFi REST API (GET/POST/DELETE /api/totp)
-// The device must have WiFi enabled (WebUI mode) for this to work.
-// BLE serial mode and WiFi WebUI mode cannot run simultaneously on Bruce.
-// -----------------------------------------------------------------------
 
 function CodeCard({ entry, onDelete, onCopy }: {
   entry: TotpEntry
@@ -82,11 +78,9 @@ function CodeCard({ entry, onDelete, onCopy }: {
   )
 }
 
-export function TotpTab({ connected }: Props) {
-  const [deviceIp, setDeviceIp]     = useState('')
+export function TotpTab({ logs, onCommand, connected }: Props) {
   const [entries, setEntries]       = useState<TotpEntry[]>([])
   const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
   const [copied, setCopied]         = useState('')
   const [showAdd, setShowAdd]       = useState(false)
   const [addMode, setAddMode]       = useState<'manual' | 'uri'>('manual')
@@ -95,63 +89,65 @@ export function TotpTab({ connected }: Props) {
   const [uri, setUri]               = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const apiBase = deviceIp ? `http://${deviceIp}` : ''
-
-  const fetchEntries = useCallback(async () => {
-    if (!apiBase) return
-    try {
-      const res = await fetch(`${apiBase}/api/totp`, { signal: AbortSignal.timeout(3000) })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: TotpEntry[] = await res.json()
-      setEntries(data)
-      setError('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }, [apiBase])
-
-  // Auto-refresh every second when connected to device IP
+  // Listen for TOTP_JSON: lines in logs
   useEffect(() => {
-    if (!apiBase) { intervalRef.current && clearInterval(intervalRef.current); return }
-    fetchEntries()
-    intervalRef.current = setInterval(fetchEntries, 1000)
-    return () => { intervalRef.current && clearInterval(intervalRef.current) }
-  }, [apiBase, fetchEntries])
-
-  const handleAdd = async () => {
-    if (!apiBase) return
-    setLoading(true)
-    try {
-      const body = new URLSearchParams()
-      if (addMode === 'uri') {
-        body.append('uri', uri)
-      } else {
-        body.append('name', name)
-        body.append('secret', secret.toUpperCase().replace(/\s/g, ''))
+    // Look from the end backwards to find the latest TOTP_JSON
+    for (let i = logs.length - 1; i >= 0; i--) {
+      if (logs[i].text.startsWith('TOTP_JSON:')) {
+        try {
+          const jsonStr = logs[i].text.slice(10)
+          const data: TotpEntry[] = JSON.parse(jsonStr)
+          setEntries(data)
+        } catch (e) {
+          console.error('Failed to parse TOTP JSON', e)
+        }
+        break
       }
-      const res = await fetch(`${apiBase}/api/totp`, { method: 'POST', body })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: TotpEntry[] = await res.json()
-      setEntries(data)
-      setName(''); setSecret(''); setUri(''); setShowAdd(false)
-      setError('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
     }
+  }, [logs])
+
+  // Poll via BLE command every 1 second if connected
+  useEffect(() => {
+    if (!connected) {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      return
+    }
+    
+    // Initial fetch
+    onCommand('totp list')
+    
+    intervalRef.current = setInterval(() => {
+      onCommand('totp list')
+    }, 1000)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [connected, onCommand])
+
+  const handleAdd = () => {
+    setLoading(true)
+    if (addMode === 'uri') {
+      onCommand(`totp add_uri "${uri}"`)
+    } else {
+      const cleanSecret = secret.toUpperCase().replace(/\s/g, '')
+      onCommand(`totp add "${name}" "${cleanSecret}"`)
+    }
+    
+    // Reset form after short delay
+    setTimeout(() => {
+      setName('')
+      setSecret('')
+      setUri('')
+      setShowAdd(false)
+      setLoading(false)
+      onCommand('totp list')
+    }, 1000)
   }
 
-  const handleDelete = async (index: number) => {
-    if (!apiBase) return
-    try {
-      const res = await fetch(`${apiBase}/api/totp?index=${index}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data: TotpEntry[] = await res.json()
-      setEntries(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
+  const handleDelete = (index: number) => {
+    onCommand(`totp delete ${index}`)
+    setTimeout(() => onCommand('totp list'), 500)
   }
 
   const handleCopy = (code: string) => {
@@ -159,6 +155,16 @@ export function TotpTab({ connected }: Props) {
       setCopied(code)
       setTimeout(() => setCopied(''), 2000)
     })
+  }
+
+  if (!connected) {
+    return (
+      <div className="animate-fade-in-up text-center py-12 space-y-3">
+        <AlertCircle size={36} className="mx-auto text-[var(--color-danger)]" />
+        <p className="font-bold text-[var(--color-danger)]">未接続</p>
+        <p className="text-[var(--color-muted)] text-sm">BLE接続が必要です</p>
+      </div>
+    )
   }
 
   return (
@@ -170,45 +176,9 @@ export function TotpTab({ connected }: Props) {
         </div>
         <div>
           <p className="font-bold text-sm text-[var(--color-cyan)]">TOTP Authenticator</p>
-          <p className="text-[10px] text-[var(--color-muted)]">Bruce WiFi WebUI API 経由で管理</p>
+          <p className="text-[10px] text-[var(--color-muted)]">BLE経由で管理 (WiFi不要)</p>
         </div>
       </div>
-
-      {/* Device IP input */}
-      <div className="glass-bright border border-[var(--color-border-bright)] rounded-xl p-3 space-y-2">
-        <label className="text-[10px] text-[var(--color-muted)] uppercase tracking-widest flex items-center gap-1">
-          <Wifi size={10} /> Bruce の IP アドレス
-        </label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={deviceIp}
-            onChange={e => setDeviceIp(e.target.value.trim())}
-            placeholder="192.168.x.x"
-            className="flex-1 bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
-          />
-          <button
-            onClick={fetchEntries}
-            disabled={!deviceIp}
-            className="px-3 py-2 rounded-lg glass-bright border border-[var(--color-border-bright)] text-[var(--color-muted)] hover:text-[var(--color-cyan)] disabled:opacity-40 transition-colors"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-        <p className="text-[9px] text-[var(--color-muted)]">
-          Bruce: WiFi → Connect → WebUI → IPを確認して入力。
-          ESP32はBLEとWiFiを同時使用可能です。
-          スマホのBTテザリング経由でもアクセスできます。
-        </p>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30">
-          <AlertCircle size={14} className="text-[var(--color-danger)] shrink-0 mt-0.5" />
-          <p className="text-xs text-[var(--color-danger)]">{error}</p>
-        </div>
-      )}
 
       {/* Copied toast */}
       {copied && (
@@ -227,94 +197,90 @@ export function TotpTab({ connected }: Props) {
         </div>
       )}
 
-      {entries.length === 0 && apiBase && !error && (
+      {entries.length === 0 && !showAdd && (
         <p className="text-center text-[var(--color-muted)] text-sm py-6">
           アカウントが登録されていません
         </p>
       )}
 
       {/* Add account */}
-      {apiBase && (
-        <>
-          {!showAdd ? (
-            <button
-              onClick={() => setShowAdd(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm
-                bg-[var(--color-cyan)]/10 border border-[var(--color-cyan)]/40 text-[var(--color-cyan)]
-                hover:bg-[var(--color-cyan)]/20 transition-all active:scale-[0.98]"
-            >
-              <Plus size={16} /> アカウントを追加
-            </button>
+      {!showAdd ? (
+        <button
+          onClick={() => setShowAdd(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm
+            bg-[var(--color-cyan)]/10 border border-[var(--color-cyan)]/40 text-[var(--color-cyan)]
+            hover:bg-[var(--color-cyan)]/20 transition-all active:scale-[0.98]"
+        >
+          <Plus size={16} /> アカウントを追加
+        </button>
+      ) : (
+        <div className="glass-bright border border-[var(--color-border-bright)] rounded-xl p-4 space-y-3">
+          <p className="font-bold text-sm text-[var(--color-cyan)]">アカウントを追加</p>
+
+          {/* Mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-[var(--color-border-bright)]">
+            {(['manual', 'uri'] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setAddMode(m)}
+                className={clsx('flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold transition-colors',
+                  addMode === m
+                    ? 'bg-[var(--color-cyan)]/20 text-[var(--color-cyan)]'
+                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                )}
+              >
+                {m === 'manual' ? <Key size={11} /> : <QrCode size={11} />}
+                {m === 'manual' ? '手動入力' : 'otpauth URI'}
+              </button>
+            ))}
+          </div>
+
+          {addMode === 'manual' ? (
+            <>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="アカウント名 (例: GitHub)"
+                className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
+              />
+              <input
+                type="text"
+                value={secret}
+                onChange={e => setSecret(e.target.value)}
+                placeholder="Base32 シークレット (JBSWY3DPEHPK3PXP)"
+                className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
+              />
+            </>
           ) : (
-            <div className="glass-bright border border-[var(--color-border-bright)] rounded-xl p-4 space-y-3">
-              <p className="font-bold text-sm text-[var(--color-cyan)]">アカウントを追加</p>
-
-              {/* Mode toggle */}
-              <div className="flex rounded-lg overflow-hidden border border-[var(--color-border-bright)]">
-                {(['manual', 'uri'] as const).map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setAddMode(m)}
-                    className={clsx('flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold transition-colors',
-                      addMode === m
-                        ? 'bg-[var(--color-cyan)]/20 text-[var(--color-cyan)]'
-                        : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
-                    )}
-                  >
-                    {m === 'manual' ? <Key size={11} /> : <QrCode size={11} />}
-                    {m === 'manual' ? '手動入力' : 'otpauth URI'}
-                  </button>
-                ))}
-              </div>
-
-              {addMode === 'manual' ? (
-                <>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="アカウント名 (例: GitHub)"
-                    className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
-                  />
-                  <input
-                    type="text"
-                    value={secret}
-                    onChange={e => setSecret(e.target.value)}
-                    placeholder="Base32 シークレット (JBSWY3DPEHPK3PXP)"
-                    className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
-                  />
-                </>
-              ) : (
-                <input
-                  type="text"
-                  value={uri}
-                  onChange={e => setUri(e.target.value)}
-                  placeholder="otpauth://totp/GitHub:user@example.com?secret=..."
-                  className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
-                />
-              )}
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAdd(false)}
-                  className="flex-1 py-2 rounded-lg text-sm text-[var(--color-muted)] border border-[var(--color-border-bright)] hover:text-[var(--color-text)] transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button
-                  onClick={handleAdd}
-                  disabled={loading || (addMode === 'manual' ? !secret : !uri)}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold
-                    bg-[var(--color-cyan)]/20 border border-[var(--color-cyan)]/50 text-[var(--color-cyan)]
-                    disabled:opacity-40 hover:bg-[var(--color-cyan)]/30 transition-colors"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  追加
-                </button>
-              </div>
-            </div>
+            <input
+              type="text"
+              value={uri}
+              onChange={e => setUri(e.target.value)}
+              placeholder="otpauth://totp/GitHub:user@example.com?secret=..."
+              className="w-full bg-[var(--color-surface-3)] border border-[var(--color-border-bright)] rounded-lg px-3 py-2 text-sm font-mono text-[var(--color-text)] placeholder-[var(--color-muted)] focus:outline-none focus:border-[var(--color-cyan)]/60"
+            />
           )}
-        </>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAdd(false)}
+              className="flex-1 py-2 rounded-lg text-sm text-[var(--color-muted)] border border-[var(--color-border-bright)] hover:text-[var(--color-text)] transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleAdd}
+              disabled={loading || (addMode === 'manual' ? !secret : !uri)}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold
+                bg-[var(--color-cyan)]/20 border border-[var(--color-cyan)]/50 text-[var(--color-cyan)]
+                disabled:opacity-40 hover:bg-[var(--color-cyan)]/30 transition-colors"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              追加
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

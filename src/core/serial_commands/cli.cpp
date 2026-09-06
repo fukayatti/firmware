@@ -14,6 +14,7 @@
 #include "storage_commands.h"
 #include "util_commands.h"
 #include "wifi_commands.h"
+#include "totp_commands.h"
 #include <globals.h>
 
 void cliErrorCallback(cmd_error *e) {
@@ -44,6 +45,7 @@ void SerialCli::setup() {
     createStorageCommands(&_cli);
     createUtilCommands(&_cli);
     createWifiCommands(&_cli);
+    createTotpCommands(&_cli);
 
 #ifdef USB_as_HID
     createBadUsbCommands(&_cli);
