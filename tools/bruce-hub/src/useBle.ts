@@ -7,6 +7,12 @@ const CHAR_UUID    = 'd555ed97-bf2a-4f46-b3eb-d1fcdd7325e9' // READ | NOTIFY | W
 const CONNECT_RETRIES = 3
 const RETRY_DELAY_MS  = 1500
 
+// Bruce characteristic is WRITE (with response), not WRITE_NR.
+// writeValueWithoutResponse fails on iOS/Bluefy because Core Bluetooth
+// only allows it for characteristics with the Write-Without-Response property.
+// writeValue (with response) works on all platforms.
+const CHUNK_SIZE = 20 // Safe BLE ATT payload floor (MTU 23 − 3 header bytes)
+
 async function sleep(ms: number) {
   return new Promise(r => setTimeout(r, ms))
 }
@@ -17,9 +23,12 @@ export function useBle(
   onDisconnect: () => void,
   onError: (msg: string) => void,
 ) {
-  const deviceRef = useRef<BluetoothDevice | null>(null)
-  const charRef   = useRef<BluetoothRemoteGATTCharacteristic | null>(null)
-  const bufferRef = useRef('')
+  const deviceRef  = useRef<BluetoothDevice | null>(null)
+  const charRef    = useRef<BluetoothRemoteGATTCharacteristic | null>(null)
+  const bufferRef  = useRef('')
+  // Track whether the char supports write-without-response (desktop Chrome)
+  // so we can fall back to writeValue on iOS/Bluefy.
+  const useWNRRef  = useRef(false)
 
   const handleNotify = useCallback((event: Event) => {
     const value = (event.target as BluetoothRemoteGATTCharacteristic).value!
@@ -32,10 +41,6 @@ export function useBle(
 
   const connect = useCallback(async () => {
     try {
-      // Use acceptAllDevices + optionalServices so the chooser shows
-      // every nearby device regardless of what services it advertises.
-      // This avoids the "No Services matching UUID" filter rejection while
-      // still giving us permission to access the service once connected.
       const device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: [SERVICE_UUID],
@@ -46,7 +51,7 @@ export function useBle(
         onDisconnect()
       })
 
-      // Retry GATT connect – the first attempt often fails on Web Bluetooth
+      // Retry GATT connect – first attempt often fails on Web Bluetooth
       let server: BluetoothRemoteGATTServer | null = null
       for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
         try {
@@ -73,13 +78,16 @@ export function useBle(
       const char = await service.getCharacteristic(CHAR_UUID)
       charRef.current = char
 
+      // Check if write-without-response is available (desktop Chrome)
+      // Properties is a bitmask: bit 2 = writeWithoutResponse, bit 3 = write
+      useWNRRef.current = char.properties.writeWithoutResponse
+
       await char.startNotifications()
       char.addEventListener('characteristicvaluechanged', handleNotify)
 
       onConnect(device.name ?? 'Bruce')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      // Don't surface "user cancelled" as an error
       if (!msg.includes('cancelled') && !msg.includes('cancel')) {
         onError(msg)
       }
@@ -92,15 +100,22 @@ export function useBle(
   }, [])
 
   const send = useCallback(async (cmd: string) => {
-    if (!charRef.current) {
+    const char = charRef.current
+    if (!char) {
       onError('Not connected – cannot send command')
       return
     }
     try {
       const data = new TextEncoder().encode(cmd + '\n')
-      // Chunk into 20-byte pieces (safe BLE MTU floor)
-      for (let i = 0; i < data.length; i += 20) {
-        await charRef.current.writeValueWithoutResponse(data.slice(i, i + 20))
+      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunk = data.slice(i, i + CHUNK_SIZE)
+        if (useWNRRef.current) {
+          // Fast path: no acknowledgment needed (desktop Chrome)
+          await char.writeValueWithoutResponse(chunk)
+        } else {
+          // Compatible path: waits for ACK — works on iOS/Bluefy too
+          await char.writeValue(chunk)
+        }
       }
     } catch (e: unknown) {
       onError(`Send failed: ${e instanceof Error ? e.message : e}`)
