@@ -7,13 +7,20 @@ BLESerialService::BLESerialService() : BruceBLEService() {}
 
 BLESerialService::~BLESerialService() {}
 
-static bool newValue = false;
-
 class BLESerialCallbacks : public NimBLECharacteristicCallbacks {
+    BLESerialService* service;
+public:
+    BLESerialCallbacks(BLESerialService* s) : service(s) {}
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo &connInfo) override {
-        newValue = true;
+        service->appendRx((std::string)pCharacteristic->getValue());
     }
 };
+
+void BLESerialService::appendRx(const std::string& data) {
+    portENTER_CRITICAL(&rx_mux);
+    rx_buffer += String(data.c_str(), data.length());
+    portEXIT_CRITICAL(&rx_mux);
+}
 
 void BLESerialService::setup(NimBLEServer *pServer) {
     pService = pServer->createService("4371ec0b-3d43-49f9-b731-7c72a4a7bb91");
@@ -23,7 +30,7 @@ void BLESerialService::setup(NimBLEServer *pServer) {
         NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::WRITE
     );
 
-    callbacks = new BLESerialCallbacks();
+    callbacks = new BLESerialCallbacks(this);
     serial_char->setCallbacks(callbacks);
 
     pService->start();
@@ -33,10 +40,10 @@ void BLESerialService::setup(NimBLEServer *pServer) {
 void BLESerialService::end() { delete callbacks; }
 
 int BLESerialService::available() {
-    if (!newValue) return 0;
-    newValue = false;
-
-    return serial_char->getValue().size();
+    portENTER_CRITICAL(&rx_mux);
+    int len = rx_buffer.length();
+    portEXIT_CRITICAL(&rx_mux);
+    return len;
 }
 
 size_t BLESerialService::println(const String &s) {
@@ -67,13 +74,23 @@ void BLESerialService::vprintf(const char *fmt, va_list args) {
 }
 
 String BLESerialService::readStringUntil(char terminator) {
-    Serial.println("readStringUntil");
+    portENTER_CRITICAL(&rx_mux);
+    int idx = rx_buffer.indexOf(terminator);
     String result = "";
-    std::string value = serial_char->getValue();
-    for (char c : value) {
-        result += c;
-        if (c == terminator) break;
+    if (idx >= 0) {
+        result = rx_buffer.substring(0, idx);
+        rx_buffer = rx_buffer.substring(idx + 1);
+    } else {
+        // If terminator not found, we don't return partial buffer.
+        // wait for the terminator to arrive in the next chunks.
+        // Wait, standard Arduino readStringUntil returns the buffer if timeout occurs,
+        // but since we want to handle chunking, returning empty here might cause issues if caller
+        // expects partial string. Let's return empty and let caller wait.
+        // Actually, if we return empty, the caller might think nothing was read.
+        // serialcmds.cpp does: String cmd_str = serialDevice->readStringUntil('\n'); 
+        // and if it's empty, it returns. This is exactly what we want: wait for '\n'.
     }
+    portEXIT_CRITICAL(&rx_mux);
     return result;
 }
 
@@ -101,20 +118,14 @@ size_t BLESerialService::write(uint8_t *str, size_t size) {
 }
 
 int BLESerialService::read() {
-    if (!available()) return -1;
-
-    std::string value = serial_char->getValue();
-    if (value.empty()) return -1;
-
-    char firstChar = value[0];
-    // Remove the first character from the buffer
-    if (value.length() > 1) {
-        serial_char->setValue(value.substr(1));
-    } else {
-        serial_char->setValue("");
+    portENTER_CRITICAL(&rx_mux);
+    int c = -1;
+    if (rx_buffer.length() > 0) {
+        c = rx_buffer.charAt(0);
+        rx_buffer = rx_buffer.substring(1);
     }
-
-    return (int)firstChar;
+    portEXIT_CRITICAL(&rx_mux);
+    return c;
 }
 
 void BLESerialService::setMTU(uint16_t mtu) { this->mtu = mtu; }

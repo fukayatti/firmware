@@ -3,6 +3,7 @@
 #include "BruceBLEService.hpp"
 
 #include <SerialDevice.h>
+#include <string>
 
 #define BUFFER_SIZE 128
 
@@ -11,8 +12,11 @@ class BLESerialCallbacks;
 class BLESerialService : public BruceBLEService, public SerialDevice {
     NimBLECharacteristic *serial_char = nullptr;
     BLESerialCallbacks *callbacks = nullptr;
+    String rx_buffer = "";
+    portMUX_TYPE rx_mux = portMUX_INITIALIZER_UNLOCKED;
 
 public:
+    void appendRx(const std::string& data);
     BLESerialService();
     ~BLESerialService() override;
     void setup(NimBLEServer *pServer) override;
