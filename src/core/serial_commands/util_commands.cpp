@@ -21,6 +21,36 @@ uint32_t uptimeCallback(cmd *c) {
     return true;
 }
 
+uint32_t timeCallback(cmd *c) {
+    Command cmd(c);
+    Argument arg = cmd.getArgument("timestamp");
+    String tsStr = arg.getValue();
+    if (tsStr.length() > 0) {
+        time_t utcEpoch = tsStr.toInt();
+        struct timeval tv = {.tv_sec = utcEpoch};
+        settimeofday(&tv, nullptr);
+        
+        // update Bruce's local clock (compensating for timezone)
+        time_t localTime = utcEpoch + bruceConfig.tmz * 3600 + (bruceConfig.dst ? 3600 : 0);
+#if defined(HAS_RTC)
+        struct tm *timeinfo = localtime(&localTime);
+        RTC_TimeTypeDef TimeStruct;
+        TimeStruct.Hours = timeinfo->tm_hour;
+        TimeStruct.Minutes = timeinfo->tm_min;
+        TimeStruct.Seconds = timeinfo->tm_sec;
+        _rtc.SetTime(&TimeStruct);
+        updateTimeStr(_rtc.getTimeStruct());
+#else
+        rtc.setTime(localTime);
+        updateTimeStr(rtc.getTimeStruct());
+        clock_set = true;
+#endif
+        serialDevice->println("Time updated");
+        return true;
+    }
+    return false;
+}
+
 uint32_t dateCallback(cmd *c) {
     if (!clock_set) {
         serialDevice->println("Clock not set");
@@ -413,6 +443,9 @@ uint32_t loaderCallback(cmd *c) {
 }
 
 void createUtilCommands(SimpleCLI *cli) {
+    Command timeCmd = cli->addCommand("time", timeCallback);
+    timeCmd.addPosArg("timestamp");
+
     cli->addCommand("uptime", uptimeCallback);
     cli->addCommand("date", dateCallback);
     cli->addCommand("i2c", i2cCallback);

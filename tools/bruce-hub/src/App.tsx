@@ -95,6 +95,16 @@ export default function App() {
 
   const clearLogs = useCallback(() => setLogs([]), [])
 
+  // Auto-sync time on connect
+  useEffect(() => {
+    if (bleState.connected) {
+      const utcEpoch = Math.floor(Date.now() / 1000)
+      const tzOffsetHours = -(new Date().getTimezoneOffset() / 60)
+      handleSend(`set tmz ${tzOffsetHours}`)
+      setTimeout(() => handleSend(`time ${utcEpoch}`), 200)
+    }
+  }, [bleState.connected, handleSend])
+
   const renderTab = () => {
     switch (tab) {
       case 'gamepad':  return <GamepadTab  onCommand={handleSend} connected={bleState.connected} />

@@ -95,9 +95,10 @@ export function TotpTab({ logs, onCommand, connected }: Props) {
   useEffect(() => {
     // Look from the end backwards to find the latest TOTP_JSON
     for (let i = logs.length - 1; i >= 0; i--) {
-      if (logs[i].text.startsWith('TOTP_JSON:')) {
+      if (logs[i].text.includes('TOTP_JSON:')) {
         try {
-          const jsonStr = logs[i].text.slice(10)
+          const idx = logs[i].text.indexOf('TOTP_JSON:')
+          const jsonStr = logs[i].text.slice(idx + 10)
           const data: TotpEntry[] = JSON.parse(jsonStr)
           setEntries(data)
         } catch (e) {
