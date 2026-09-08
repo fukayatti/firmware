@@ -29,6 +29,7 @@ export function useBle(
   // Track whether the char supports write-without-response (desktop Chrome)
   // so we can fall back to writeValue on iOS/Bluefy.
   const useWNRRef  = useRef(false)
+  const sendQueue  = useRef<Promise<void>>(Promise.resolve())
 
   const handleNotify = useCallback((event: Event) => {
     const value = (event.target as BluetoothRemoteGATTCharacteristic).value!
@@ -105,21 +106,27 @@ export function useBle(
       onError('Not connected – cannot send command')
       return
     }
-    try {
-      const data = new TextEncoder().encode(cmd + '\n')
-      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-        const chunk = data.slice(i, i + CHUNK_SIZE)
-        if (useWNRRef.current) {
-          // Fast path: no acknowledgment needed (desktop Chrome)
-          await char.writeValueWithoutResponse(chunk)
-        } else {
-          // Compatible path: waits for ACK — works on iOS/Bluefy too
-          await char.writeValue(chunk)
+    
+    // Serialize write operations to prevent "GATT operation already in progress"
+    sendQueue.current = sendQueue.current.then(async () => {
+      try {
+        const data = new TextEncoder().encode(cmd + '\n')
+        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+          const chunk = data.slice(i, i + CHUNK_SIZE)
+          if (useWNRRef.current) {
+            // Fast path: no acknowledgment needed (desktop Chrome)
+            await char.writeValueWithoutResponse(chunk)
+          } else {
+            // Compatible path: waits for ACK — works on iOS/Bluefy too
+            await char.writeValue(chunk)
+          }
         }
+      } catch (e: unknown) {
+        onError(`Send failed: ${e instanceof Error ? e.message : e}`)
       }
-    } catch (e: unknown) {
-      onError(`Send failed: ${e instanceof Error ? e.message : e}`)
-    }
+    })
+    
+    return sendQueue.current
   }, [onError])
 
   return { connect, disconnect, send }
