@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Gamepad2, Terminal, Layers, Settings2, Subtitles, AlertCircle, X, Key,
+  Gamepad2, Terminal, Layers, Settings2, Subtitles, AlertCircle, X, Key, TerminalSquare
 } from 'lucide-react'
 
 import { Header } from './components/Header'
@@ -13,6 +13,7 @@ import { SettingsTab } from './components/SettingsTab'
 import { SubtitleHUD } from './components/SubtitleHUD'
 import { ConnectGuide } from './components/ConnectGuide'
 import { TotpTab } from './components/TotpTab'
+import { BadUsbTab } from './components/BadUsbTab'
 
 import { useBle } from './useBle'
 import type { BleState, LogEntry } from './types'
@@ -20,6 +21,7 @@ import type { BleState, LogEntry } from './types'
 const TABS: Tab[] = [
   { id: 'gamepad',  label: 'Control',  icon: Gamepad2  },
   { id: 'terminal', label: 'Terminal', icon: Terminal   },
+  { id: 'badusb',   label: 'BadUSB',   icon: TerminalSquare },
   { id: 'modules',  label: 'Modules',  icon: Layers     },
   { id: 'totp',     label: 'TOTP',     icon: Key        },
   { id: 'settings', label: 'Actions',  icon: Settings2  },
@@ -109,6 +111,7 @@ export default function App() {
     switch (tab) {
       case 'gamepad':  return <GamepadTab  onCommand={handleSend} connected={bleState.connected} />
       case 'terminal': return <TerminalTab logs={logs} onSend={handleSend} onClear={clearLogs} connected={bleState.connected} />
+      case 'badusb':   return <BadUsbTab   logs={logs} onCommand={handleSend} connected={bleState.connected} />
       case 'modules':  return <ModulesTab  onCommand={handleSend} connected={bleState.connected} />
       case 'totp':     return <TotpTab     logs={logs} onCommand={handleSend} connected={bleState.connected} />
       case 'settings': return <SettingsTab onCommand={handleSend} connected={bleState.connected} />
