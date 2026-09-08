@@ -77,6 +77,61 @@ uint32_t badusbBufferCallback(cmd *c) {
 #endif
 }
 
+uint32_t badusbKbStartCallback(cmd *c) {
+#ifndef LITE_VERSION
+    ducky_startKb(hid_usb, false, 0); // 0 = Keyboard
+    return true;
+#else
+    return false;
+#endif
+}
+
+uint32_t badusbKbStopCallback(cmd *c) {
+#ifndef LITE_VERSION
+    if (hid_usb != nullptr) {
+        delete hid_usb;
+        hid_usb = nullptr;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+uint32_t badusbKbTypeCallback(cmd *c) {
+#ifndef LITE_VERSION
+    Command cmd(c);
+    String text = cmd.getArgument("text").getValue();
+    if (hid_usb == nullptr) { ducky_startKb(hid_usb, false, 0); }
+    if (hid_usb != nullptr) {
+        hid_usb->print(text.c_str());
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+uint32_t badusbKbPressCallback(cmd *c) {
+#ifndef LITE_VERSION
+    Command cmd(c);
+    String key1_str = cmd.getArgument("key1").getValue();
+    String key2_str = cmd.getArgument("key2").getValue();
+    String key3_str = cmd.getArgument("key3").getValue();
+
+    if (hid_usb == nullptr) { ducky_startKb(hid_usb, false, 0); }
+    if (hid_usb != nullptr) {
+        if (key1_str.length() > 0) hid_usb->press(key1_str.toInt());
+        if (key2_str.length() > 0) hid_usb->press(key2_str.toInt());
+        if (key3_str.length() > 0) hid_usb->press(key3_str.toInt());
+        hid_usb->releaseAll();
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
 void createBadUsbCommands(SimpleCLI *cli) {
 #ifndef LITE_VERSION
     Command badusbCmd = cli->addCompositeCmd("bu,badusb");
@@ -85,5 +140,16 @@ void createBadUsbCommands(SimpleCLI *cli) {
     fileCmd.addPosArg("filepath");
 
     Command bufferCmd = badusbCmd.addCommand("run_from_buffer", badusbBufferCallback);
+
+    Command startCmd = badusbCmd.addCommand("kb_start", badusbKbStartCallback);
+    Command stopCmd = badusbCmd.addCommand("kb_stop", badusbKbStopCallback);
+    
+    Command typeCmd = badusbCmd.addCommand("kb_type", badusbKbTypeCallback);
+    typeCmd.addPosArg("text");
+
+    Command pressCmd = badusbCmd.addCommand("kb_press", badusbKbPressCallback);
+    pressCmd.addPosArg("key1", "");
+    pressCmd.addPosArg("key2", "");
+    pressCmd.addPosArg("key3", "");
 #endif
 }
